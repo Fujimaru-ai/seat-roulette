@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>朝の席ルーレット</title>
+<style>
+  :root{
+    --bg:#eef3f8;
+    --ink:#1f2a44;
+    --sub:#6b7a99;
+    --card:#ffffff;
+    --accent:#ff5d5d;
+    --line:#d9e2ee;
+    --ok:#2fa46a;
+    --seat:#c22a4e;      /* 配置図の席枠 */
+    --fixed:#b45b77;     /* 固定席の色 */
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:"Hiragino Maru Gothic ProN","M PLUS Rounded 1c","Hiragino Sans",system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;
+    padding:max(16px, env(safe-area-inset-top)) 16px 40px;
+    overflow-x:hidden;
+  }
+  header{
+    width:100%;max-width:420px;margin-bottom:8px;
+    display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
+  }
+  .head-mid{text-align:center;}
+  .eyebrow{font-size:11px;letter-spacing:.25em;color:var(--sub);}
+  h1{font-size:21px;font-weight:800;margin-top:2px;}
+  h1 .dot{color:var(--accent);}
+  .gear{
+    grid-column:3;width:44px;height:44px;border-radius:50%;
+    border:2px solid var(--line);background:#fff;font-size:20px;cursor:pointer;
+  }
+
+  /* 名前選択 */
+  .who{width:min(90vw,360px);margin:8px auto 0;}
+  .who .label{font-size:12px;color:var(--sub);margin-bottom:6px;text-align:center;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+  .chip{
+    font-family:inherit;font-size:14px;font-weight:700;
+    padding:8px 14px;border-radius:999px;border:2px solid var(--line);
+    background:#fff;color:var(--ink);cursor:pointer;
+  }
+  .chip.selected{border-color:var(--accent);background:var(--accent);color:#fff;}
+  .chip.assigned{border-color:var(--line);background:#f2f5fa;color:var(--sub);}
+  .chip.assigned::after{content:" ✓";color:var(--ok);}
+  .chip.fixedchip{border-color:#e7c3cf;background:#fdf1f5;color:var(--fixed);}
+  .chip.fixedchip::after{content:" 📌";}
+
+  .lookup{
+    width:min(90vw,360px);margin:10px auto 0;text-align:center;
+    background:#fff;border:2px solid var(--ok);border-radius:14px;padding:10px;
+    font-size:15px;display:none;
+  }
+  .lookup.show{display:block;}
+  .lookup strong{font-size:20px;}
+
+  .wheel-wrap{position:relative;width:min(86vw,340px);margin:14px auto 6px;}
+  .pointer{
+    position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+    width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;
+    border-top:22px solid var(--accent);z-index:5;
+    filter:drop-shadow(0 2px 2px rgba(31,42,68,.25));
+  }
+  #wheel{width:100%;display:block;transition:transform 1.5s cubic-bezier(.15,.7,.1,1);}
+  .hub{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+  .hub span{
+    background:#fff;border:3px solid var(--ink);border-radius:50%;
+    width:56px;height:56px;display:flex;align-items:center;justify-content:center;
+    font-size:24px;
+  }
+
+  .spin-btn{
+    display:block;width:min(86vw,340px);margin:14px auto 0;
+    background:var(--ink);color:#fff;border:none;border-radius:16px;
+    font-family:inherit;font-size:18px;font-weight:800;padding:16px;
+    box-shadow:0 4px 0 #0e1730;cursor:pointer;
+  }
+  .spin-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #0e1730;}
+  .spin-btn:disabled{opacity:.45;box-shadow:none;transform:none;}
+
+  .result{
+    width:min(86vw,340px);margin:14px auto 0;background:var(--card);
+    border:2px dashed var(--line);border-radius:16px;padding:14px;text-align:center;
+    display:none;
+  }
+  .result.show{display:block;animation:pop .35s cubic-bezier(.2,1.6,.4,1);}
+  @keyframes pop{from{transform:scale(.85);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .result .label{font-size:11px;letter-spacing:.2em;color:var(--sub);}
+  .result .seat{font-size:30px;font-weight:800;margin:4px 0 10px;}
+  .result .actions{display:flex;gap:8px;}
+  .result button{
+    flex:1;font-family:inherit;font-weight:700;font-size:14px;padding:11px 4px;
+    border-radius:12px;border:2px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer;
+  }
+  .result button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  section.panel{
+    width:min(90vw,360px);margin:18px auto 0;background:var(--card);
+    border-radius:16px;padding:14px;border:1px solid var(--line);
+  }
+  .panel h2{font-size:13px;color:var(--sub);letter-spacing:.12em;margin-bottom:10px;
+    display:flex;justify-content:space-between;align-items:center;}
+  .panel h2 button{
+    font-family:inherit;font-size:12px;font-weight:700;border:none;background:none;
+    color:var(--accent);cursor:pointer;padding:4px;
+  }
+
+  /* ===== 配置図(縦並び) ===== */
+  .floor-label{
+    font-size:14px;font-weight:800;color:var(--ink);
+    margin:4px 0 6px;display:flex;align-items:center;gap:6px;
+  }
+  .floor-label::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--seat);}
+  .floor-label + .floor{margin-bottom:14px;}
+  .floor{
+    position:relative;width:100%;aspect-ratio:1/1.05;
+    background:
+      linear-gradient(#f7fafd 1px, transparent 1px) 0 0/100% 12.5%,
+      linear-gradient(90deg,#f7fafd 1px, transparent 1px) 0 0/12.5% 100%,
+      #fcfdff;
+    border:2px solid var(--ink);border-radius:10px;overflow:hidden;
+  }
+  .fx{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border-radius:6px;font-weight:700;text-align:center;line-height:1.15;}
+  .fx.room{border:1.5px solid #aab6c9;background:#f2f5fa;color:var(--sub);font-size:10px;}
+  .fx.free{border:1.5px solid #5b8def;background:#eaf1ff;color:#3b64c4;font-size:10px;}
+  .fx.fixed{border:1.5px solid #d78ea3;background:#fdf1f5;color:var(--fixed);font-size:10px;}
+  .seatbox{
+    position:absolute;border:2.5px solid var(--seat);background:#fff;border-radius:7px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    line-height:1.1;overflow:hidden;
+  }
+  .seatbox .sl{font-size:13px;font-weight:800;color:var(--seat);}
+  .seatbox .nm{font-size:10px;font-weight:800;color:var(--ink);max-width:96%;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;}
+  .seatbox.occupied{background:var(--seat);}
+  .seatbox.occupied .sl{color:#ffd3dd;font-size:10px;font-weight:700;}
+  .seatbox.occupied .nm{display:block;color:#fff;}
+  .seatbox.fixedseat{border-color:var(--fixed);background:#fdf1f5;border-style:dashed;}
+  .seatbox.fixedseat .sl{color:var(--fixed);font-size:10px;font-weight:700;}
+  .seatbox.fixedseat .sl::after{content:" 📌";font-size:8px;}
+  .seatbox.fixedseat .nm{display:block;color:var(--fixed);}
+  .seatbox.pulse{animation:pulse 1s ease-in-out 3;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(47,164,106,.0);}
+    50%{box-shadow:0 0 0 6px rgba(47,164,106,.45);}}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:2px;font-size:11px;color:var(--sub);}
+  .legend span{display:flex;align-items:center;gap:4px;}
+  .lg{width:14px;height:11px;border-radius:3px;display:inline-block;}
+  .lg.empty{border:2px solid var(--seat);background:#fff;}
+  .lg.used{background:var(--seat);}
+  .lg.pin{border:2px dashed var(--fixed);background:#fdf1f5;}
+  .lg.other{border:1.5px solid #aab6c9;background:#f2f5fa;}
+
+  ul.history{list-style:none;font-size:14px;}
+  ul.history li{padding:6px 2px;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline;}
+  ul.history li:last-child{border-bottom:none;}
+  ul.history .n{color:var(--sub);min-width:3.4em;font-size:12px;}
+  ul.history .arrow{color:var(--sub);}
+  .empty{color:var(--sub);font-size:13px;text-align:center;padding:6px 0;}
+
+  /* ===== 設定画面(オーバーレイ) ===== */
+  .settings{
+    position:fixed;inset:0;background:var(--bg);z-index:100;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:max(16px, env(safe-area-inset-top)) 16px 40px;
+    display:none;flex-direction:column;align-items:center;
+  }
+  .settings.open{display:flex;}
+  .settings-head{
+    width:min(90vw,360px);display:grid;grid-template-columns:44px 1fr 44px;
+    align-items:center;margin-bottom:8px;
+  }
+  .settings-head h1{grid-column:2;text-align:center;font-size:19px;}
+  .close-btn{
+    grid-column:3;width:44px;height:44px;border-radius:50%;
+    border:2px solid var(--line);background:#fff;font-size:18px;font-weight:800;
+    color:var(--ink);cursor:pointer;
+  }
+  .fixrow{
+    display:flex;align-items:center;gap:10px;padding:7px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .fixrow:last-child{border-bottom:none;}
+  .fixrow .seatname{font-weight:800;min-width:3.6em;font-size:14px;}
+  .fixrow select{
+    flex:1;font-family:inherit;font-size:14px;font-weight:700;color:var(--ink);
+    padding:8px;border-radius:10px;border:1.5px solid var(--line);background:#fff;
+  }
+  .fixrow select.pinned{border-color:var(--fixed);background:#fdf1f5;color:var(--fixed);}
+  textarea{
+    width:100%;min-height:110px;font-family:inherit;font-size:15px;line-height:1.7;
+    border:1.5px solid var(--line);border-radius:12px;padding:10px;resize:vertical;color:var(--ink);
+  }
+  textarea:focus{outline:2px solid var(--accent);border-color:transparent;}
+  .hint{font-size:12px;color:var(--sub);margin-top:6px;}
+  .save-btn{
+    margin-top:10px;width:100%;font-family:inherit;font-weight:800;font-size:15px;
+    padding:12px;border-radius:12px;border:none;background:var(--ink);color:#fff;cursor:pointer;
+  }
+  .done-btn{
+    width:min(90vw,360px);margin:20px auto 0;font-family:inherit;font-weight:800;font-size:16px;
+    padding:14px;border-radius:14px;border:none;background:var(--accent);color:#fff;cursor:pointer;
+  }
+
+  .confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:50;pointer-events:none;
+    animation:fall linear forwards;}
+  @keyframes fall{to{transform:translateY(105vh) rotate(720deg);opacity:.9;}}
+  @media (prefers-reduced-motion:reduce){
+    #wheel{transition:none;}
+    .confetti{display:none;}
+    .result.show{animation:none;}
+    .seatbox.pulse{animation:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-mid" style="grid-column:2;">
+    <div class="eyebrow">GOOD MORNING</div>
+    <h1>朝の席ルーレット<span class="dot">●</span></h1>
+  </div>
+  <button class="gear" id="openSettings" aria-label="設定">⚙️</button>
+</header>
+
+<div class="who">
+  <div class="label">名前を選択して、ルーレットを回してください</div>
+  <div class="chips" id="chips"></div>
+</div>
+
+<div class="lookup" id="lookup"></div>
+
+<div class="wheel-wrap">
+  <div class="pointer"></div>
+  <svg id="wheel" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div class="hub"><span>🪑</span></div>
+</div>
+
+<button class="spin-btn" id="spinBtn">名前を選んでください</button>
+
+<div class="result" id="result">
+  <div class="label" id="resultLabel">本日のあなたの席</div>
+  <div class="seat" id="resultSeat">—</div>
+  <div class="actions">
+    <button id="rejectBtn">回し直す</button>
+    <button class="primary" id="takeBtn">この席で確定</button>
+  </div>
+</div>
+
+<!-- ===== 配置図(縦並び) ===== -->
+<section class="panel">
+  <h2>オフィス配置図(メゾネット)</h2>
+  <div class="floor-label">8階</div>
+  <div class="floor" id="floor8"></div>
+  <div class="floor-label">7階</div>
+  <div class="floor" id="floor7"></div>
+  <div class="legend">
+    <span><i class="lg empty"></i>空席</span>
+    <span><i class="lg used"></i>使用中</span>
+    <span><i class="lg pin"></i>固定席</span>
+    <span><i class="lg other"></i>応接など</span>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>今日の割り当て <button id="resetDay">朝リセット</button></h2>
+  <ul class="history" id="history"></ul>
+  <div class="empty" id="historyEmpty">まだ誰も回していません</div>
+</section>
+
+<!-- ===== 設定画面 ===== -->
+<div class="settings" id="settings">
+  <div class="settings-head">
+    <h1>⚙️ 設定</h1>
+    <button class="close-btn" id="closeSettings" aria-label="閉じる">✕</button>
+  </div>
+
+  <section class="panel">
+    <h2>メンバーの編集</h2>
+    <textarea id="memberInput" placeholder="田中&#10;佐藤&#10;鈴木"></textarea>
+    <div class="hint">1行に1人ずつ(最大20人)</div>
+    <button class="save-btn" id="saveMembers">メンバーを保存して反映</button>
+  </section>
+
+  <section class="panel">
+    <h2>固定席の設定</h2>
+    <div id="fixRows"></div>
+    <div class="hint">メンバーを選ぶとその席は📌固定席になり、ルーレットの対象外になります。「ルーレット対象」に戻せば解除されます。設定はすぐに反映・保存されます。</div>
+  </section>
+
+  <button class="done-btn" id="doneSettings">設定を閉じる</button>
+</div>
+
+<script>
+(function(){
+  var COLORS = ["#ff8a8a","#ffc46b","#ffe08a","#9fd98f","#7fd0c9","#8ab6ff","#b79bff","#f19ad2",
+                "#ffa36b","#8fd9c0"];
+  var SEATS = ["A","B","C","D","E","F","G","H","I","J"];
+  var DEFAULT_MEMBERS = ["メンバー1","メンバー2","メンバー3"];
+  var SPIN_MS = 1500; // スピン時間(CSSの transition 1.5s と合わせる)
+
+  // ===== 配置図データ(座標は各フロアに対する%) =====
+  var FLOORS = {
+    f8: {
+      el: "floor8",
+      seats: [
+        {id:"J", x:6,  y:8,  w:20, h:17},
+        {id:"I", x:6,  y:27, w:20, h:17},
+        {id:"H", x:38, y:8,  w:20, h:17},
+        {id:"G", x:38, y:27, w:20, h:17},
+        {id:"F", x:70, y:8,  w:20, h:17},
+        {id:"E", x:70, y:27, w:20, h:17}
+      ],
+      fixtures: [
+        {cls:"fixed", label:"宇梶さん",   x:6,  y:52, w:22, h:11},
+        {cls:"fixed", label:"設楽さん",   x:6,  y:66, w:22, h:11},
+        {cls:"room",  label:"WC",         x:34, y:80, w:16, h:12},
+        {cls:"room",  label:"階段",       x:56, y:80, w:16, h:12},
+        {cls:"room",  label:"EV",         x:76, y:80, w:14, h:12}
+      ]
+    },
+    f7: {
+      el: "floor7",
+      seats: [
+        {id:"D", x:6,  y:26, w:20, h:14},
+        {id:"C", x:6,  y:42, w:20, h:14},
+        {id:"A", x:10, y:66, w:17, h:12},
+        {id:"B", x:29, y:66, w:17, h:12}
+      ],
+      fixtures: [
+        {cls:"room", label:"応接③",       x:26, y:4,  w:26, h:15},
+        {cls:"free", label:"自由席",       x:64, y:6,  w:28, h:9},
+        {cls:"room", label:"応接②",       x:64, y:20, w:28, h:11},
+        {cls:"free", label:"自由席",       x:6,  y:58, w:28, h:6.5},
+        {cls:"room", label:"応接①",       x:64, y:40, w:28, h:11},
+        {cls:"room", label:"エントランス", x:40, y:84, w:26, h:10},
+        {cls:"room", label:"階段",         x:8,  y:84, w:16, h:10},
+        {cls:"room", label:"EV",           x:76, y:84, w:14, h:10}
+      ]
+    }
+  };
+
+  var members = [];
+  var assignments = [];   // ルーレットの結果 [{name, seat}] ※毎日リセット
+  var fixedSeats = {};    // 固定席 {"A":"田中"} ※日をまたいでも保持
+  var selectedName = null;
+  var lastResult = null;
+  var rotation = 0;
+  var spinning = false;
+
+  // ---- storage (Documents/Safariで保存され、使えない環境では黙って無視) ----
+  function load(){
+    try{
+      var m = localStorage.getItem("seatRoulette.members");
+      var a = localStorage.getItem("seatRoulette.assignments");
+      var f = localStorage.getItem("seatRoulette.fixedSeats");
+      var d = localStorage.getItem("seatRoulette.date");
+      if(m) members = JSON.parse(m);
+      if(f) fixedSeats = JSON.parse(f) || {};
+      var today = new Date().toDateString();
+      if(a && d === today) assignments = JSON.parse(a); // 日付が変わったら自動リセット(固定席は残る)
+    }catch(e){}
+    if(!members || members.length < 1) members = DEFAULT_MEMBERS.slice();
+    assignments = (assignments || []).filter(function(x){ return SEATS.indexOf(x.seat) !== -1; });
+    // 存在しないメンバー・席の固定情報は掃除
+    Object.keys(fixedSeats).forEach(function(s){
+      if(SEATS.indexOf(s) === -1 || members.indexOf(fixedSeats[s]) === -1) delete fixedSeats[s];
+    });
+  }
+  function save(){
+    try{
+      localStorage.setItem("seatRoulette.members", JSON.stringify(members));
+      localStorage.setItem("seatRoulette.assignments", JSON.stringify(assignments));
+      localStorage.setItem("seatRoulette.fixedSeats", JSON.stringify(fixedSeats));
+      localStorage.setItem("seatRoulette.date", new Date().toDateString());
+    }catch(e){}
+  }
+
+  function takenSeats(){ return assignments.map(function(a){ return a.seat; }); }
+  function activeSeats(){
+    var t = takenSeats();
+    return SEATS.filter(function(s){ return t.indexOf(s) === -1 && !fixedSeats[s]; });
+  }
+  function assignmentOf(name){
+    for(var i = 0; i < assignments.length; i++){
+      if(assignments[i].name === name) return assignments[i];
+    }
+    return null;
+  }
+  function fixedSeatOf(name){
+    var found = null;
+    Object.keys(fixedSeats).forEach(function(s){ if(fixedSeats[s] === name) found = s; });
+    return found;
+  }
+  function occupantOf(seat){
+    if(fixedSeats[seat]) return {name: fixedSeats[seat], fixed: true};
+    for(var i = 0; i < assignments.length; i++){
+      if(assignments[i].seat === seat) return {name: assignments[i].name, fixed: false};
+    }
+    return null;
+  }
+  function floorLabelOf(seat){
+    return "ABCD".indexOf(seat) !== -1 ? "7階" : "8階";
+  }
+
+  // ===== 配置図 =====
+  function buildFloors(){
+    Object.keys(FLOORS).forEach(function(key){
+      var f = FLOORS[key];
+      var el = document.getElementById(f.el);
+      var html = "";
+      f.fixtures.forEach(function(x){
+        html += '<div class="fx '+x.cls+'" style="left:'+x.x+'%;top:'+x.y+'%;width:'+x.w+'%;height:'+x.h+'%;">'+esc(x.label)+'</div>';
+      });
+      f.seats.forEach(function(s){
+        html += '<div class="seatbox" id="seat-'+s.id+'" style="left:'+s.x+'%;top:'+s.y+'%;width:'+s.w+'%;height:'+s.h+'%;">'+
+                '<span class="sl">'+s.id+'</span><span class="nm"></span></div>';
+      });
+      el.innerHTML = html;
+    });
+  }
+  function renderMap(){
+    SEATS.forEach(function(id){
+      var box = document.getElementById("seat-" + id);
+      if(!box) return;
+      var occ = occupantOf(id);
+      var nm = box.querySelector(".nm");
+      box.classList.remove("occupied","fixedseat");
+      if(occ && occ.fixed){
+        box.classList.add("fixedseat");
+        nm.textContent = occ.name;
+      }else if(occ){
+        box.classList.add("occupied");
+        nm.textContent = occ.name;
+      }else{
+        nm.textContent = "";
+      }
+    });
+  }
+  function highlightSeat(seat, scroll){
+    var box = document.getElementById("seat-" + seat);
+    if(!box) return;
+    if(scroll) box.scrollIntoView({behavior:"smooth", block:"center"});
+    box.classList.remove("pulse");
+    void box.offsetWidth;
+    box.classList.add("pulse");
+  }
+
+  // ---- 名前チップ ----
+  function renderChips(){
+    var wrap = document.getElementById("chips");
+    wrap.innerHTML = "";
+    members.forEach(function(name){
+      var b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = name;
+      var fseat = fixedSeatOf(name);
+      var asg = assignmentOf(name);
+      if(fseat) b.classList.add("fixedchip");
+      else if(asg) b.classList.add("assigned");
+      if(name === selectedName) b.classList.add("selected");
+      b.addEventListener("click", function(){
+        var fs = fixedSeatOf(name);
+        if(fs){
+          showLookup(name, fs, true);
+          highlightSeat(fs, true);
+          return;
+        }
+        var asg2 = assignmentOf(name);
+        if(asg2){
+          showLookup(name, asg2.seat, false);
+          highlightSeat(asg2.seat, true);
+          return;
+        }
+        selectedName = (selectedName === name) ? null : name;
+        hideLookup();
+        document.getElementById("result").classList.remove("show");
+        lastResult = null;
+        renderChips();
+        updateSpinBtn();
+      });
+      wrap.appendChild(b);
+    });
+  }
+  function showLookup(name, seat, isFixed){
+    var el = document.getElementById("lookup");
+    var tag = isFixed ? "(固定席)" : "";
+    el.innerHTML = esc(name) + " さんの席は <strong>" + esc(seat) + "</strong>(" + floorLabelOf(seat) + ")" + tag + "です";
+    el.classList.add("show");
+  }
+  function hideLookup(){
+    document.getElementById("lookup").classList.remove("show");
+  }
+
+  function updateSpinBtn(){
+    var b = document.getElementById("spinBtn");
+    if(activeSeats().length === 0){
+      b.disabled = true;
+      b.textContent = "全席うまりました 🎉";
+    }else if(!selectedName){
+      b.disabled = true;
+      b.textContent = "名前を選んでください";
+    }else{
+      b.disabled = false;
+      b.textContent = selectedName + " さんの席を決める!";
+    }
+  }
+
+  // ---- wheel drawing ----
+  function polar(cx, cy, r, deg){
+    var rad = (deg - 90) * Math.PI / 180;
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+  }
+  function drawWheel(){
+    var list = activeSeats();
+    var svg = document.getElementById("wheel");
+    var n = list.length;
+    var html = "";
+    if(n === 0){
+      html = '<circle cx="150" cy="150" r="140" fill="#d9e2ee"/>' +
+             '<text x="150" y="155" text-anchor="middle" font-size="15" fill="#6b7a99">全席うまりました 🎉</text>';
+      svg.innerHTML = html;
+      return;
+    }
+    if(n === 1){
+      html = '<circle cx="150" cy="150" r="140" fill="'+COLORS[0]+'" stroke="#fff" stroke-width="3"/>' +
+             '<text x="150" y="160" text-anchor="middle" font-size="30" font-weight="bold" fill="#1f2a44">'+esc(list[0])+'</text>';
+      svg.innerHTML = html;
+      return;
+    }
+    var seg = 360 / n;
+    for(var i = 0; i < n; i++){
+      var a0 = i * seg, a1 = (i + 1) * seg;
+      var p0 = polar(150,150,140,a0), p1 = polar(150,150,140,a1);
+      var large = seg > 180 ? 1 : 0;
+      html += '<path d="M150,150 L'+p0[0].toFixed(2)+','+p0[1].toFixed(2)+
+              ' A140,140 0 '+large+' 1 '+p1[0].toFixed(2)+','+p1[1].toFixed(2)+
+              ' Z" fill="'+COLORS[i % COLORS.length]+'" stroke="#ffffff" stroke-width="3"/>';
+      var mid = a0 + seg/2;
+      var tp = polar(150,150,100,mid);
+      html += '<text x="'+tp[0].toFixed(1)+'" y="'+tp[1].toFixed(1)+'" text-anchor="middle" dominant-baseline="middle"'+
+              ' font-size="22" font-weight="bold" fill="#1f2a44"'+
+              ' transform="rotate('+mid+' '+tp[0].toFixed(1)+' '+tp[1].toFixed(1)+')">'+esc(list[i])+'</text>';
+    }
+    svg.innerHTML = html;
+  }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  // ---- spin ----
+  function spin(){
+    var list = activeSeats();
+    if(spinning || list.length === 0 || !selectedName) return;
+    spinning = true;
+    hideLookup();
+    document.getElementById("spinBtn").disabled = true;
+    document.getElementById("result").classList.remove("show");
+
+    var n = list.length;
+    var winner = Math.floor(Math.random() * n);
+    lastResult = list[winner];
+
+    var seg = 360 / n;
+    var center = winner * seg + seg / 2;
+    var jitter = (Math.random() - 0.5) * seg * 0.7;
+    var current = ((rotation % 360) + 360) % 360;
+    var target = (360 - center + jitter + 360) % 360;
+    var delta = (target - current + 360) % 360;
+    rotation += 360 * 3 + delta; // 1.5秒なので回転数は3回転+α
+
+    document.getElementById("wheel").style.transform = "rotate(" + rotation + "deg)";
+
+    setTimeout(function(){
+      spinning = false;
+      document.getElementById("resultLabel").textContent = selectedName + " さんの本日の席";
+      document.getElementById("resultSeat").textContent = lastResult + "(" + floorLabelOf(lastResult) + ")";
+      document.getElementById("result").classList.add("show");
+      updateSpinBtn();
+      confetti();
+    }, SPIN_MS + 100);
+  }
+
+  // ---- result actions ----
+  function takeSeat(){
+    if(!lastResult || !selectedName) return;
+    var seat = lastResult;
+    assignments.push({ name: selectedName, seat: seat });
+    save();
+    lastResult = null;
+    selectedName = null;
+    document.getElementById("result").classList.remove("show");
+    renderChips();
+    renderHistory();
+    renderMap();
+    drawWheel();
+    updateSpinBtn();
+    highlightSeat(seat); // スクロールなしで光らせるだけ
+  }
+  function resetDay(){
+    assignments = [];
+    lastResult = null;
+    selectedName = null;
+    save();
+    hideLookup();
+    renderChips();
+    renderHistory();
+    renderMap();
+    drawWheel();
+    updateSpinBtn();
+    document.getElementById("result").classList.remove("show");
+  }
+
+  function renderHistory(){
+    var ul = document.getElementById("history");
+    var empty = document.getElementById("historyEmpty");
+    ul.innerHTML = "";
+    if(assignments.length === 0){ empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    assignments.forEach(function(a, i){
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="n">' + (i+1) + '人目</span><strong>' + esc(a.name) +
+                     '</strong><span class="arrow">→</span><strong>' + esc(a.seat) + '</strong>' +
+                     '<span class="n">(' + floorLabelOf(a.seat) + ')</span>';
+      ul.appendChild(li);
+    });
+  }
+
+  // ===== 設定画面 =====
+  function openSettings(){
+    document.getElementById("memberInput").value = members.join("\n");
+    renderFixRows();
+    document.getElementById("settings").classList.add("open");
+  }
+  function closeSettings(){
+    document.getElementById("settings").classList.remove("open");
+    renderChips(); renderHistory(); renderMap(); drawWheel(); updateSpinBtn();
+  }
+  function renderFixRows(){
+    var wrap = document.getElementById("fixRows");
+    wrap.innerHTML = "";
+    SEATS.forEach(function(seat){
+      var row = document.createElement("div");
+      row.className = "fixrow";
+      var label = document.createElement("span");
+      label.className = "seatname";
+      label.textContent = seat + "(" + floorLabelOf(seat) + ")";
+      var sel = document.createElement("select");
+      var opt0 = document.createElement("option");
+      opt0.value = "";
+      opt0.textContent = "ルーレット対象";
+      sel.appendChild(opt0);
+      members.forEach(function(name){
+        var o = document.createElement("option");
+        o.value = name;
+        o.textContent = "📌 " + name + " に固定";
+        sel.appendChild(o);
+      });
+      sel.value = fixedSeats[seat] || "";
+      if(sel.value) sel.classList.add("pinned");
+      sel.addEventListener("change", function(){
+        var name = sel.value;
+        if(name){
+          // 同じ人が他の席に固定されていたら解除
+          Object.keys(fixedSeats).forEach(function(s){
+            if(fixedSeats[s] === name) delete fixedSeats[s];
+          });
+          fixedSeats[seat] = name;
+          // その席・その人の当日のルーレット結果は取り消す
+          assignments = assignments.filter(function(a){ return a.seat !== seat && a.name !== name; });
+          if(selectedName === name) selectedName = null;
+        }else{
+          delete fixedSeats[seat];
+        }
+        save();
+        renderFixRows(); // 表示を更新(重複解除の反映)
+      });
+      row.appendChild(label);
+      row.appendChild(sel);
+      wrap.appendChild(row);
+    });
+  }
+
+  // ---- メンバー編集 ----
+  function saveMemberList(){
+    var lines = document.getElementById("memberInput").value
+      .split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+    var uniq = [];
+    lines.forEach(function(s){ if(uniq.indexOf(s) === -1) uniq.push(s); });
+    if(uniq.length < 1){ alert("メンバーを1人以上入力してください"); return; }
+    if(uniq.length > 20){ alert("メンバーは20人までにしてください"); return; }
+    members = uniq;
+    assignments = assignments.filter(function(a){ return members.indexOf(a.name) !== -1; });
+    Object.keys(fixedSeats).forEach(function(s){
+      if(members.indexOf(fixedSeats[s]) === -1) delete fixedSeats[s];
+    });
+    if(selectedName && members.indexOf(selectedName) === -1) selectedName = null;
+    save();
+    renderFixRows();
+    alert("メンバーを保存しました");
+  }
+
+  // ---- confetti ----
+  function confetti(){
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for(var i = 0; i < 36; i++){
+      var c = document.createElement("div");
+      c.className = "confetti";
+      c.style.left = Math.random() * 100 + "vw";
+      c.style.background = COLORS[Math.floor(Math.random() * COLORS.length)];
+      c.style.animationDuration = (1.6 + Math.random() * 1.4) + "s";
+      c.style.animationDelay = (Math.random() * 0.3) + "s";
+      c.style.borderRadius = Math.random() > 0.5 ? "50%" : "2px";
+      document.body.appendChild(c);
+      (function(el){ setTimeout(function(){ el.remove(); }, 3600); })(c);
+    }
+  }
+
+  // ---- init ----
+  load();
+  buildFloors();
+  renderChips();
+  renderHistory();
+  renderMap();
+  drawWheel();
+  updateSpinBtn();
+  document.getElementById("spinBtn").addEventListener("click", spin);
+  document.getElementById("takeBtn").addEventListener("click", takeSeat);
+  document.getElementById("rejectBtn").addEventListener("click", function(){
+    document.getElementById("result").classList.remove("show");
+    spin();
+  });
+  document.getElementById("resetDay").addEventListener("click", resetDay);
+  document.getElementById("openSettings").addEventListener("click", openSettings);
+  document.getElementById("closeSettings").addEventListener("click", closeSettings);
+  document.getElementById("doneSettings").addEventListener("click", closeSettings);
+  document.getElementById("saveMembers").addEventListener("click", saveMemberList);
+})();
+</script>
+</body>
+</html>
